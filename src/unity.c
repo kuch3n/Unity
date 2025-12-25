@@ -538,7 +538,7 @@ static void UnityTestResultsBegin(const char* file, const UNITY_LINE_TYPE line)
     UNITY_OUTPUT_CHAR(':');
 #else
 #ifdef UNITY_OUTPUT_FOR_JUNIT
-    UnityPrint("  <failure msg=\"\">");
+    // do nothing
 #else
     UnityPrint(file);
     UNITY_OUTPUT_CHAR(':');
