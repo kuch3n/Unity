@@ -537,12 +537,16 @@ static void UnityTestResultsBegin(const char* file, const UNITY_LINE_TYPE line)
     UnityPrint(Unity.CurrentTestName);
     UNITY_OUTPUT_CHAR(':');
 #else
+#ifdef UNITY_OUTPUT_FOR_JUNIT
+    UnityPrint("  <failure msg=\"\">");
+#else
     UnityPrint(file);
     UNITY_OUTPUT_CHAR(':');
     UnityPrintNumber((UNITY_INT)line);
     UNITY_OUTPUT_CHAR(':');
     UnityPrint(Unity.CurrentTestName);
     UNITY_OUTPUT_CHAR(':');
+#endif
 #endif
 #endif
 #endif
@@ -583,6 +587,7 @@ void UnityConcludeTest(void)
 /*-----------------------------------------------*/
 static void UnityAddMsgIfSpecified(const char* msg)
 {
+    Unity.CurrentTestMessage = msg;
 #ifdef UNITY_PRINT_TEST_CONTEXT
     UnityPrint(UnityStrSpacer);
     UNITY_PRINT_TEST_CONTEXT();
