@@ -587,7 +587,6 @@ void UnityConcludeTest(void)
 /*-----------------------------------------------*/
 static void UnityAddMsgIfSpecified(const char* msg)
 {
-    Unity.CurrentTestMessage = msg;
 #ifdef UNITY_PRINT_TEST_CONTEXT
     UnityPrint(UnityStrSpacer);
     UNITY_PRINT_TEST_CONTEXT();
