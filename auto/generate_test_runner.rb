@@ -101,7 +101,7 @@ class UnityTestRunnerGenerator
       create_suite_setup(output)
       create_suite_teardown(output)
       create_reset(output)
-      create_run_test(output) unless tests.empty?
+      create_run_test(output) unless tests.empty? or @options[:extended_runner]
       create_args_wrappers(output, tests)
       create_shuffle_tests(output) if @options[:shuffle_tests]
       create_main(output, input_file, tests, used_mocks)
@@ -295,12 +295,15 @@ class UnityTestRunnerGenerator
     output.puts('}') if @options[:externcincludes]
     output.puts('#include "CException.h"') if @options[:plugins].include?(:cexception)
 
+    output.puts('static void run_test(UnityTestFunction func, const char* name, UNITY_LINE_TYPE line_num);')
+
     return unless @options[:enforce_strict_ordering]
 
     output.puts('')
     output.puts('int GlobalExpectCount;')
     output.puts('int GlobalVerifyOrder;')
     output.puts('char* GlobalOrderError;')
+    
   end
 
   def create_run_test_params_struct(output)
