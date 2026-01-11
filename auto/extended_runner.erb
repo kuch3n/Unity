@@ -45,10 +45,13 @@ struct
 } UnityArguments;
 
 const char FILE_NAME[] = "<%= input_file %>";
+UnityTestResult * TestResult;
 
 bool UnityStringStartsWith(const char *pre, const char *str);
 int UnityGetCommandLineOptions(int argc, const char* argv[]);
 void UnityListTestCases(void);
+int UnityExtendedEnd(void);
+UNITY_UINT UnityTimeDiff(UNITY_TIME_TYPE start, UNITY_TIME_TYPE end);
 
 static size_t getCountTestCases(UnityTestSuite const * const suite);
 static size_t getCountTestFailures(UnityTestSuite const * const suite);
@@ -72,7 +75,7 @@ UnityTestSuite UnityTestSuites[] = {
         .name = "<%= test[:test] %>", .cases = (UnityTestCase[]) {
 <% test[:args].each.with_index(1) do |args, arg_idx| %>
 <%  %>
-            { .func = runner_args<%= arg_idx %>_<%= test[:test] %>, .name = "<%= test[:test] %>(<%= args.concat %>)", .line_num = <%= test[:line_number] %>, .suite = "<%= test[:test] %>"  },
+            { .func = runner_args<%= arg_idx %>_<%= test[:test] %>, .name = "<%= test[:test] %>[<%= arg_idx  %>]", .line_num = <%= test[:line_number] %>, .suite = "<%= test[:test] %>"  },
 <% end %>
             {NULL, NULL, 0}},
     },
@@ -81,19 +84,6 @@ UnityTestSuite UnityTestSuites[] = {
 };
 
 #define UNITY_TEST_SUITES sizeof(UnityTestSuites) / sizeof(UnityTestSuite)
-
-UnityTestCase UnityTestCases[<%= count_tests(tests) %>] = {
-<% tests.each_with_index do |test, idx| %>
-<% if (!@options[:use_param_tests]) || test[:args].nil? || test[:args].empty? %>
-    [<%= idx %>] = { .func = <%= test[:test] %>, .name = "<%= test[:test] %>", .line_num = <%= test[:line_number] %>, .suite = NULL },
-<% else %>
-<% test[:args].each.with_index(1) do |args, arg_idx| %>
-<%  %>
-    [<%= idx %>] = { .func = runner_args<%= arg_idx %>_<%= test[:test] %>, .name = "<%= test[:test] %>(<%= args.concat %>)", .suite = "<%= test[:test] %>"  },
-<% end %>
-<% end %>
-<% end %>
-};
 
 int main(int argc, const char* argv[])
 {
@@ -110,6 +100,55 @@ int main(int argc, const char* argv[])
     {
         return 0;
     }
+
+    UnityBegin(FILE_NAME);
+
+    for(size_t idx = 0; idx < UNITY_TEST_SUITES; idx++)
+    {
+        UNITY_TIME_TYPE timeStart, timeStop;
+
+        UnityTestCase * testCase = UnityTestSuites[idx].cases;
+        time_t current_time;
+        const struct tm * tm;
+    
+        current_time = time(NULL);
+        tm = localtime(&current_time);
+        // ToDo: Error Handling
+        strftime(UnityTestSuites[idx].timestamp , sizeof(UnityTestSuites[idx].timestamp), "%Y-%m-%dT%H:%M:%S", tm);
+        
+        UNITY_GET_TIME(timeStart);
+
+        while(testCase->func != NULL)
+        {
+            TestResult = &(testCase->result);
+
+            TestResult->file = testCase->file;
+            TestResult->classname = testCase->name;
+            TestResult->name = testCase->name;
+            TestResult->line = testCase->line_num;
+            TestResult->isSkipped = false;
+            TestResult->isIgnored = false;
+            TestResult->isFailed = false;
+            TestResult->time = 0;
+
+            if(UnityArguments.caseFilter != NULL && strstr(UnityArguments.caseFilter, testCase->name) == NULL)
+            {
+                TestResult->isSkipped = true;
+                testCase++;
+
+                continue;
+            }
+
+            
+            run_test(testCase->func, testCase->name, testCase->line_num);
+            testCase++;
+        }
+        UNITY_GET_TIME(timeStop);
+
+        UnityTestSuites[idx].time = UnityTimeDiff(timeStart, timeStop);
+    }
+
+    return UnityExtendedEnd();
 }
 
 #define VERSION "0.0.1"
@@ -140,8 +179,9 @@ int UnityGetCommandLineOptions(int argc, const char* argv[])
             printf("-lr,  --list-reporters   list all registered reporters\n");
             printf("\n");
             printf("-tc,  --test-case=<filters>\n");
+            printf("-ts,  --test-suite=<filters>\n");
 
-            return 1; // Exit without running tests
+            return 1; /* Exit without running tests */
         }
         else if(strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0)
         {
@@ -186,7 +226,7 @@ int UnityGetCommandLineOptions(int argc, const char* argv[])
         {
             size_t offset = strlen("--test-case=");
 
-            // points to '\0' if no filter is given after argument
+            /* points to '\0' if no filter is given after argument */
             UnityArguments.caseFilter = &(argv[i][offset]);
 
             return 0;
@@ -245,6 +285,16 @@ void UnityListTestCases(void)
     printf("</doctest>\n");
 }
 
+UNITY_UINT UnityTimeDiff(UNITY_TIME_TYPE start, UNITY_TIME_TYPE end)
+{
+    UNITY_UINT diff;
+    
+    diff = ((end.tv_sec - start.tv_sec) * 1000L);
+    diff += ((end.tv_nsec - start.tv_nsec) / 1000000L);
+
+    return diff;
+}
+
 static size_t getCountTestCases(UnityTestSuite const * const suite)
 {
     size_t count = 0;
@@ -294,4 +344,77 @@ static size_t getCountTestIgnores(UnityTestSuite const * const suite)
     }
 
     return ignores;
+}
+
+int UnityExtendedEnd(void)
+{
+    UNITY_UINT time;
+
+    UNITY_PRINT_EOL();
+    
+    
+    UnityTestSuite const * suite = UnityTestSuites;
+
+    printf("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    printf("<doctest binary=\"%s\" version=\"%s\">\n", __FILE__, VERSION);
+
+    for(size_t idx = 0; idx < UNITY_TEST_SUITES; idx++)
+    {
+        size_t cases = getCountTestCases(suite);
+
+        printf("  <TestSuite");
+        if(strlen(suite->name) > 0)
+        {
+            printf(" name=\"%s\"", suite->name);
+        }
+        printf(">\n");
+
+        for(size_t idx_case = 0; idx_case < cases; idx_case++)
+        {
+            UnityTestResult * result = &suite->cases[idx_case].result;
+
+            printf("    <TestCase");
+            printf(" name=\"%s\"", result->name);
+            printf(" classname=\"%s\"", result->classname);
+            printf(" assertions=\"0\"");
+            printf(" time=\"%u\"", result->time);
+            printf(" filename=\"%s\"", FILE_NAME);
+            if(result->isSkipped)
+            {
+                printf(" skipped=\"%s\"", "true");
+            }
+            printf(" line=\"%u\"", result->line);
+            printf(">\n");
+            
+            if(!result->isFailed && !result->isSkipped)
+            {
+                printf("      <OverallResultsAsserts successes=\"0\" failures=\"0\" test_case_success=\"true\"/>\n");
+            }
+
+            if(result->isFailed)
+            {
+                printf("      <Message type=\"FATAL ERROR\" filename=\"%s\" line=\"%u\">\n", FILE_NAME, result->line);
+                printf("        <Text>\n");
+                printf("          %s\n", result->msg);
+                printf("        </Text>\n");
+                printf("      </Message>\n");
+                printf("      <OverallResultsAsserts successes=\"0\" failures=\"1\" test_case_success=\"false\"/>\n");
+            }
+
+
+            
+            printf("    </TestCase>\n");
+            
+        }
+
+        printf("  </TestSuite>\n");
+
+        suite++;
+    }
+
+    printf("</doctest>\n");
+
+    UNITY_FLUSH_CALL();
+    UNITY_OUTPUT_COMPLETE();
+    return (int)(Unity.TestFailures);
 }
