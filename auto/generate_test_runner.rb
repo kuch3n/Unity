@@ -43,6 +43,7 @@ class UnityTestRunnerGenerator
       main_name: 'main', # set to :auto to automatically generate each time
       main_export_decl: '',
       cmdline_args: false,
+      extended_runner: false,
       omit_begin_end: false,
       use_param_tests: false,
       use_system_files: true,
@@ -104,6 +105,7 @@ class UnityTestRunnerGenerator
       create_args_wrappers(output, tests)
       create_shuffle_tests(output) if @options[:shuffle_tests]
       create_main(output, input_file, tests, used_mocks)
+      create_extended_runner(output, tests)
     end
 
     return unless @options[:header_file] && !@options[:header_file].empty?
@@ -410,6 +412,14 @@ class UnityTestRunnerGenerator
   def create_run_test(output)
     require 'erb'
     file = File.read(File.join(__dir__, 'run_test.erb'))
+    template = ERB.new(file, trim_mode: '<>')
+    output.puts("\n#{template.result(binding)}")
+  end
+
+  def create_extended_runner(output, tests)
+    require 'erb'
+    return if @options[:extended_runner].nil?
+    file = File.read(File.join(__dir__, 'extended_runner.erb'))
     template = ERB.new(file, trim_mode: '<>')
     output.puts("\n#{template.result(binding)}")
   end

@@ -1,0 +1,29 @@
+/*=======Extended Runner=====*/
+
+typedef struct
+{
+  UnityTestFunction func;
+  const char* name;
+  const char* file;
+  const char* suite;
+  UNITY_LINE_TYPE line_num;
+  /* JUnitTestResult result;*/
+} UnityTestCase;
+
+UnityTestCase UnityTestCases[<%= count_tests(tests) %>] = {
+<% tests.each_with_index do |test, idx| %>
+<% if (!@options[:use_param_tests]) || test[:args].nil? || test[:args].empty? %>
+    [<%= idx %>] = { .func = <%= test[:test] %>, .name = "<%= test[:test] %>", .line_num = <%= test[:line_number] %>, .suite = NULL },
+<% else %>
+<% test[:args].each.with_index(1) do |args, arg_idx| %>
+<%  %>
+    [<%= idx %>] = { .func = runner_args<%= arg_idx %>_<%= test[:test] %>, .name = "<%= test[:test] %>(<%= args.concat %>)", .suite = "<%= test[:test] %>"  },
+<% end %>
+<% end %>
+<% end %>
+};
+
+int main(int argc, char ** argv)
+{
+    printf("Hello World\n");
+}
