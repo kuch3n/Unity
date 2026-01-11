@@ -265,6 +265,9 @@ class UnityTestRunnerGenerator
         output.puts('#include <time.h>')
       end
     end
+    if @options[:extended_runner]
+      output.puts('#include <string.h>')
+    end
     output.puts("#include \"#{@options[:framework]}.h\"")
     output.puts('#include "cmock.h"') unless mocks.empty?
     output.puts('}') if @options[:externcincludes]
