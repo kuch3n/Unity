@@ -105,7 +105,7 @@ class UnityTestRunnerGenerator
       create_args_wrappers(output, tests)
       create_shuffle_tests(output) if @options[:shuffle_tests]
       create_main(output, input_file, tests, used_mocks)
-      create_extended_runner(output, tests)
+      create_extended_runner(output, tests, input_file)
     end
 
     return unless @options[:header_file] && !@options[:header_file].empty?
@@ -419,7 +419,7 @@ class UnityTestRunnerGenerator
     output.puts("\n#{template.result(binding)}")
   end
 
-  def create_extended_runner(output, tests)
+  def create_extended_runner(output, tests, input_file)
     require 'erb'
     return if @options[:extended_runner].nil?
     file = File.read(File.join(__dir__, 'extended_runner.erb'))

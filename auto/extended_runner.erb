@@ -1,7 +1,20 @@
 /*=======Extended Runner=====*/
 
-bool UnityStringStartsWith(const char *pre, const char *str);
-int UnityGetCommandLineOptions(int argc, const char* argv[]);
+#define BUF_SIZE 4096
+
+typedef struct
+{
+    const char * classname;
+    const char * name;
+    const char * file;
+    bool isFailed;
+    bool isIgnored;
+    bool isSkipped;
+    int time;
+    int line;
+    int idx_msg;
+    char msg[BUF_SIZE];
+} UnityTestResult;
 
 typedef struct
 {
@@ -10,8 +23,18 @@ typedef struct
   const char* file;
   const char* suite;
   UNITY_LINE_TYPE line_num;
-  /* JUnitTestResult result;*/
+  UnityTestResult result;
 } UnityTestCase;
+
+typedef struct
+{
+    const char* name;
+    UnityTestCase * cases;
+    UNITY_COUNTER_TYPE failures;
+    UNITY_COUNTER_TYPE ignores;
+    UNITY_UINT time;
+    char timestamp[BUF_SIZE];
+} UnityTestSuite;
 
 struct
 {
@@ -20,6 +43,44 @@ struct
     bool printReporters;
     char const * caseFilter;
 } UnityArguments;
+
+const char FILE_NAME[] = "<%= input_file %>";
+
+bool UnityStringStartsWith(const char *pre, const char *str);
+int UnityGetCommandLineOptions(int argc, const char* argv[]);
+void UnityListTestCases(void);
+
+static size_t getCountTestCases(UnityTestSuite const * const suite);
+static size_t getCountTestFailures(UnityTestSuite const * const suite);
+static size_t getCountTestIgnores(UnityTestSuite const * const suite);
+
+UnityTestSuite UnityTestSuites[] = {
+    {
+        .name = "", .cases = (UnityTestCase[]) {
+<% tests.each_with_index do |test, idx| %>
+<% if (!@options[:use_param_tests]) || test[:args].nil? || test[:args].empty? %>
+            { .func = <%= test[:test] %>, .name = "<%= test[:test] %>", .line_num = <%= test[:line_number] %>, .suite = NULL },
+<% end %>
+<% end %>
+            {NULL, NULL, 0}},
+    },
+<% tests.each_with_index do |test, idx| %>
+<% if (!@options[:use_param_tests]) || test[:args].nil? || test[:args].empty? %>
+<% next %>
+<% else %>
+    {
+        .name = "<%= test[:test] %>", .cases = (UnityTestCase[]) {
+<% test[:args].each.with_index(1) do |args, arg_idx| %>
+<%  %>
+            { .func = runner_args<%= arg_idx %>_<%= test[:test] %>, .name = "<%= test[:test] %>(<%= args.concat %>)", .line_num = <%= test[:line_number] %>, .suite = "<%= test[:test] %>"  },
+<% end %>
+            {NULL, NULL, 0}},
+    },
+<% end %>
+<% end %>
+};
+
+#define UNITY_TEST_SUITES sizeof(UnityTestSuites) / sizeof(UnityTestSuite)
 
 UnityTestCase UnityTestCases[<%= count_tests(tests) %>] = {
 <% tests.each_with_index do |test, idx| %>
@@ -42,7 +103,7 @@ int main(int argc, const char* argv[])
 
     if(UnityArguments.printCases)
     {
-        // UnityListTestCases();
+        UnityListTestCases();
     }
 
     if(exit == 1)
@@ -146,4 +207,91 @@ bool UnityStringStartsWith(const char *pre, const char *str)
     size_t lenpre = strlen(pre),
            lenstr = strlen(str);
     return lenstr < lenpre ? false : memcmp(pre, str, lenpre) == 0;
+}
+
+void UnityListTestCases(void)
+{
+    printf("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+
+    printf("<doctest binary=\"%s\" version=\"%s\">\n", __FILE__, VERSION);
+
+    for(size_t idx = 0; idx < UNITY_TEST_SUITES; idx++)
+    {
+        bool inSuite = false;
+        size_t cases = getCountTestCases(&(UnityTestSuites[idx]));
+
+        if(strlen(UnityTestSuites[idx].name) > 0)
+        {
+            inSuite = true;
+        }
+
+        for(size_t idx_case = 0; idx_case < cases; idx_case++)
+        {
+            UnityTestCase const * _case = &(UnityTestSuites[idx].cases[idx_case]);
+
+            printf("  <TestCase");
+            printf(" name=\"%s\"", _case->name);
+            if(inSuite == true)
+            {
+                printf(" testsuite=\"%s\"", UnityTestSuites[idx].name);
+            }
+            printf(" filename=\"%s\"", FILE_NAME);
+            printf(" line=\"%u\"", _case->line_num);
+            printf(" skipped=\"false\"");
+            printf("/>\n");
+        }
+    }
+
+    printf("</doctest>\n");
+}
+
+static size_t getCountTestCases(UnityTestSuite const * const suite)
+{
+    size_t count = 0;
+    UnityTestCase const * testCase;
+
+    testCase = suite->cases;
+    while(testCase->func != NULL)
+    {
+        testCase++;
+        count++;
+    }
+
+    return count;
+}
+
+static size_t getCountTestFailures(UnityTestSuite const * const suite)
+{
+    size_t failures = 0;
+    UnityTestCase const * testCase;
+
+    testCase = suite->cases;
+    while(testCase->func != NULL)
+    {
+        testCase++;
+        if(testCase->result.isFailed)
+        {
+            failures++;
+        }
+    }
+
+    return failures;
+}
+
+static size_t getCountTestIgnores(UnityTestSuite const * const suite)
+{
+    size_t ignores = 0;
+    UnityTestCase const * testCase;
+
+    testCase = suite->cases;
+    while(testCase->func != NULL)
+    {
+        testCase++;
+        if(testCase->result.isIgnored)
+        {
+            ignores++;
+        }
+    }
+
+    return ignores;
 }
